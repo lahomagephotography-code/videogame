@@ -180,8 +180,9 @@ def frame(near, far, bob, tail_dy, hair_dy, espro):
     return over(out, body)
 
 poses = {}
-for i in range(8):                       # walk: the legs pass each other twice per cycle
-    ph = i / 8 * 2 * math.pi
+WALK_FRAMES = 12
+for i in range(WALK_FRAMES):             # walk: the legs pass each other twice per cycle
+    ph = i / WALK_FRAMES * 2 * math.pi
     poses['run_%d' % i] = dict(near=gait(ph), far=gait(ph + math.pi),
         bob=12 * abs(math.sin(ph)), tail_dy=10 * math.sin(2 * ph), hair_dy=12 * math.cos(2 * ph + 0.8))
 poses['rise'] = dict(near=(580, 45), far=(360, 60), bob=0, tail_dy=55, hair_dy=18)
