@@ -10,6 +10,11 @@ a[495:540,120:210]=0
 cloud=(hsv[...,1]<45)&(hsv[...,2]>200); cloud[260:]=False; a[cloud]=0                     # palm trunk remnant under tail
 a=cv2.morphologyEx(a,cv2.MORPH_OPEN,np.ones((3,3),np.uint8))
 n,lab,st,_=cv2.connectedComponentsWithStats(a); a=np.where(lab==1+np.argmax(st[1:,4]),255,0).astype(np.uint8)
+# fill small enclosed holes (light jeans / teeth pixels that looked like sky)
+n,lab,st,_=cv2.connectedComponentsWithStats((a==0).astype(np.uint8),connectivity=4)
+for i in range(1,n):
+    x,y,w,h,area=st[i]
+    if area<6000 and x>0 and y>0 and x+w<a.shape[1] and y+h<a.shape[0]: a[lab==i]=255
 rgba=np.dstack([img,a]); Hh,Ww=a.shape
 GROUND=791
 def over(dst,src):

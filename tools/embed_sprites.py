@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Embed every PNG in sprites/ into index.html as a data URI (keeps the game a single file).
+"""Embed every PNG/WebP in sprites/ into index.html as a data URI (keeps the game a single file).
 
 Usage (from the repo root):  python3 tools/embed_sprites.py
 """
@@ -11,11 +11,12 @@ sprite_dir = os.path.join(ROOT, 'sprites')
 
 lines = []
 for name in sorted(os.listdir(sprite_dir)):
-    if not name.endswith('.png'):
+    ext = name.rsplit('.', 1)[-1].lower()
+    if ext not in ('png', 'webp'):
         continue
     with open(os.path.join(sprite_dir, name), 'rb') as f:
         data = base64.b64encode(f.read()).decode('ascii')
-    lines.append("  %s: 'data:image/png;base64,%s'," % (name[:-4], data))
+    lines.append("  %s: 'data:image/%s;base64,%s'," % (name.rsplit('.', 1)[0], ext, data))
 
 html = open(html_path, encoding='utf-8').read()
 block = '/*EMBED_START*/\n' + '\n'.join(lines) + '\n/*EMBED_END*/'
