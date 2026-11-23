@@ -73,8 +73,11 @@ const CFG = {
   POWER_TIME: { espresso: 8.5, key: 10, cash: 5 },     // espresso = the ESPRO cup, cash = money bag
   MAGNET_RADIUS: 130,
 
+  // Sky-writing clouds: each message is one line of puffy cloud letters, taking turns across the sky
+  SKY_MESSAGES: ['MY REALTOR IS BETTER THAN YOURS', 'JOSHUA GLAZE (562) 413-9399'],
+
   // Parallax factors (1 = moves with the ground)
-  PARALLAX: { clouds: 0.06, skyline: 0.1, backdrop: 0.2, palms: 0.5, ferns: 0.8 },
+  PARALLAX: { skyText: 0.12, clouds: 0.06, skyline: 0.1, backdrop: 0.2, palms: 0.5, ferns: 0.8 },
 };
 
 /* == 2. SPRITES FROM YOUR ART ==================================================
@@ -255,7 +258,7 @@ const FONT = {
   '5':'111100110001110', '6':'011100111101111', '7':'111001010010010', '8':'111101111101111', '9':'111101111001110',
   ':':'000010000010000', '.':'000000000000010', '!':'010010010000010', '-':'000000111000000', '+':'000010111010000',
   '*':'000101010101000', '?':'110001010000010', "'":'010010000000000', '/':'001001010100100', ',':'000000000010100',
-  ' ':'000000000000000',
+  ' ':'000000000000000', '(':'010100100100010', ')':'010001001001010',
 };
 
 /* == 5. Sprite builders ========================================================
@@ -501,6 +504,27 @@ function buildHouse(kind, alt) {
   return a;
 }
 
+// ---- Sky-writing: a line of text made of cloud puffs (built at 2x, like the reference art)
+function buildCloudText(str) {
+  const U = 5, PAD = 7;                          // real pixels per font pixel, margin
+  const cols = str.length * 4 - 1, w = cols * U + PAD * 2, h = 5 * U + PAD * 2;
+  const a = new PixelArt(w, h), rng = mulberry32(str.length * 31 + 7);
+  for (let i = 0; i < str.length; i++) {
+    const g = FONT[str[i]] || FONT['?'];
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) {
+      if (g[r * 3 + k] !== '1') continue;
+      const cx = PAD + (i * 4 + k) * U + U / 2, cy = PAD + r * U + U / 2;
+      a.circle(cx, cy, 3.6 + rng() * 0.9, '#ffffff');                       // one puff per letter pixel
+      if (rng() < 0.25) a.circle(cx + (rng() - 0.5) * 3, cy + (rng() - 0.5) * 3, 2.6, '#ffffff');
+    }
+  }
+  a.shade('#ffffff', null, '#d6ebff');                                      // soft blue underside
+  a.recolor((x, y, c) => (c === '#ffffff' && y > h - PAD - 5 && rng() < 0.5) ? '#e8f4ff' : c);
+  a.outline('#b4daf7');
+  const c = a.toCanvas(); c.lw = w / CFG.ART_SCALE; c.lh = h / CFG.ART_SCALE;
+  return c;
+}
+
 function buildHeart(full) {
   const a = new PixelArt(9, 8, 1, 1), c = full ? '#ff3b5c' : '#4a2a3a';
   ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'].forEach((row, y) => {
@@ -547,6 +571,7 @@ function buildAllSprites() {
   SPR.icon_house = buildHouseIcon().toCanvas();
   for (let i = 0; i < 4; i++) SPR['puff_' + i] = buildPuff(2 + i).toCanvas();
   SPR.sparkle = buildSparkle().toCanvas();
+  CFG.SKY_MESSAGES.forEach((m, i) => SPR['cloudtext_' + i] = buildCloudText(m.toUpperCase()));
 }
 
 // Load the embedded art, then any SPRITE_FILES overrides. Resolves when done.
@@ -1197,7 +1222,7 @@ function buildSky() {
 }
 
 function tileLayer(img, f, y) {
-  const w = iw(img), off = -((game.scroll * f) % w);
+  const w = iw(img), off = -((((game.scroll * f) % w) + w) % w);
   for (let x = off; x < W; x += w) drawSpr(img, x, y);
 }
 function drawProps(keys, f, spacing, jitter, bottom, seed, skip) {
@@ -1218,6 +1243,12 @@ function drawBackground() {
   for (let i = Math.floor((cs - 80) / sp); i <= Math.floor((cs + W) / sp) + 1; i++) {
     const img = SPR['cloud_' + Math.floor(hash(i) * 3)];
     drawSpr(img, i * sp + hash(i + 99) * 70 - cs, 34 + hash(i + 33) * 60 - game.camY * 0.1);
+  }
+  // Sky-writing clouds: the messages take turns, one on screen at a time
+  const ts = game.scroll * P.skyText + game.t * 4, tsp = 760, nMsg = CFG.SKY_MESSAGES.length;
+  for (let i = Math.floor((ts - 400) / tsp); i <= Math.floor((ts + W) / tsp); i++) {
+    const img = SPR['cloudtext_' + (((i % nMsg) + nMsg) % nMsg)];
+    if (img) drawSpr(img, i * tsp + 120 - ts, 44 + hash(i * 5 + 1) * 22 - game.camY * 0.12);
   }
   const bd = SPR.backdrop, bdTop = GROUND_TOP - ih(bd) + 1 - game.camY * 0.3;
   drawProps(['skyline'], P.skyline, 300, 90, bdTop + 9, 3, 0.25);           // city peeks over the mountains
