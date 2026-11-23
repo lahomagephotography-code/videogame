@@ -1092,16 +1092,16 @@ function updateObjects(dt) {
   });
 
   // Houses: the raptor opens wide and swallows them whole
-  // ...but only if you run past it on the ground. Jump over it and you just miss the sale.
+  // ...but only if you run past it on the ground. Land on it and it still sells; clear it completely and you miss the sale.
   const mouthX = x + RAPTOR.mouth[0];
   const low = p.y > GROUND_Y - 10;             // mouth low enough to bite the house
   game.houseList = game.houseList.filter(h => {
     if (h.eaten) { h.eatT += dt; return h.eatT < 0.25; }
     if (game.mode !== 'play' || h.missed) return true;
     if (h.x - mouthX < 40 && low) p.chompT = Math.max(p.chompT, 0.1);
-    if (h.x <= mouthX - 4) {                     // the house reaches the mouth: on the ground = SOLD, in the air = missed
-      if (low) eatHouse(h);
-      else h.missed = true;                     // no sale: no points, no sign
+    if (h.x <= mouthX - 4) {
+      if (low) eatHouse(h);                      // on the ground (or just landed on it) = SOLD
+      else if (h.x + iw(SPR['house_' + h.kind]) < x + RAPTOR.feet[1]) h.missed = true;   // came down past it: cleared it, no sale
     }
     return true;
   });
