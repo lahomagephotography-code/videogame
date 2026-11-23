@@ -69,7 +69,7 @@ const CFG = {
   HOUSES_PER_LEVEL: 10,     // each level: faster, more enemies and holes (see pickChunk / maybeHazard)
   ESPRESSO_SPEED_MULT: 1.4,
 
-  START_HEARTS: 3, MAX_HEARTS: 5, HURT_TIME: 2,
+  START_HEARTS: 3, MAX_HEARTS: 3, HURT_TIME: 2,    // you can never have more than 3 hearts
   POWER_TIME: { espresso: 8.5, key: 10, cash: 5 },     // espresso = the ESPRO cup, cash = money bag
   MAGNET_RADIUS: 130,
 
@@ -898,8 +898,8 @@ function puff(x, y, n = 3, spread = 10) {
 
 function collectCoin() {
   game.coins++; addScore(10); Sound.play('coin');
-  if (game.coins % 100 === 0) {
-    if (game.hearts < CFG.MAX_HEARTS) game.hearts++;
+  if (game.coins % 100 === 0 && game.hearts < CFG.MAX_HEARTS) {   // every 100 coins: a heart back, if you've lost one
+    game.hearts++;
     addText('1UP!', playerX(), game.player.y - 75, '#7dff8a', 2); Sound.play('oneup');
   }
 }
