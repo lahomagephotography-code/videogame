@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>Sold Raptor</title>
 <style>
   html, body {
@@ -1714,6 +1715,10 @@ const EMBEDDED_SPRITES = {
 /*EMBED_END*/
 };
 boot();
+// Installable app: cache the game so it opens offline once added to the home screen.
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
