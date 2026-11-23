@@ -1,9 +1,11 @@
 # Scenery at half the reference resolution: fern, skyline, ground tile and a stitched
 # (image-quilted, wrap-around) mountains + forest backdrop built only from clean areas.
 import sys, os, cv2, numpy as np
-OUT = sys.argv[1]; SC = float(sys.argv[2]) if len(sys.argv) > 2 else 0.459
+OUT = sys.argv[1]
+# size of each asset relative to the original reference images (matches the zoomed-out mock-up)
+SCALES = {'fern': 0.30, 'skyline': 0.32, 'ground_h': 79, 'ground': 0.45, 'backdrop': 0.345}
 r1 = cv2.imread('reference/ref1_raptor.png'); r3 = cv2.imread('reference/ref3_sign.png')
-def shrink_rgba(c, a):
+def shrink_rgba(c, a, SC):
     c = c.astype(np.float32); a = a.astype(np.float32)
     w, h = round(c.shape[1] * SC), round(c.shape[0] * SC)
     r = cv2.resize(np.dstack([c * a[..., None], a * 255]), (w, h), interpolation=cv2.INTER_AREA)
@@ -22,7 +24,7 @@ m[ins & blue] = cv2.GC_BGD; m[ins & (h_[..., 0] >= 28) & (h_[..., 0] <= 50) & (h
 bg = np.zeros((1, 65)); fg = np.zeros((1, 65)); cv2.grabCut(r1, m, None, bg, fg, 6, cv2.GC_INIT_WITH_MASK)
 a = ((m == 1) | (m == 3)).astype(np.uint8); a[blue] = 0
 a = cv2.morphologyEx(a, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-fern = shrink_rgba(r1[y0:y1, x0:x1], a[y0:y1, x0:x1])
+fern = shrink_rgba(r1[y0:y1, x0:x1], a[y0:y1, x0:x1], SCALES['fern'])
 ys, xs = np.where(fern[..., 3] > 0); fern = fern[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
 cv2.imwrite(OUT + '/fern.png', fern)
 
@@ -30,7 +32,7 @@ cv2.imwrite(OUT + '/fern.png', fern)
 x0, y0, x1, y1 = 560, 300, 945, 425
 a = (hsv(r3)[y0:y1, x0:x1, 2] < 238).astype(np.uint8)
 a = cv2.morphologyEx(a, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-cv2.imwrite(OUT + '/skyline.png', shrink_rgba(r3[y0:y1, x0:x1], a))
+cv2.imwrite(OUT + '/skyline.png', shrink_rgba(r3[y0:y1, x0:x1], a, SCALES['skyline']))
 
 # ---- ground tile: seamless period found in the clean stretch of ref1 -----------
 g = r1[765:941].astype(np.float32)
@@ -41,7 +43,7 @@ for s in range(760, 860, 2):
         d = np.abs(g[:, s] - g[:, s + P]).mean() + np.abs(g[:, s + 1] - g[:, s + P + 1]).mean()
         if best is None or d < best[0]: best = (d, s, P)
 _, s, P = best
-tile = cv2.resize(g[:, s:s + P], (round(P * SC), 80), interpolation=cv2.INTER_AREA)
+tile = cv2.resize(g[:, s:s + P], (round(P * SCALES['ground']), SCALES['ground_h']), interpolation=cv2.INTER_AREA)
 cv2.imwrite(OUT + '/ground.png', np.clip(tile, 0, 255).astype(np.uint8))
 
 # ---- backdrop: quilt patches from clean regions into a wrap-around panorama ----
@@ -85,5 +87,5 @@ a = (~sky).astype(np.uint8)
 for x in range(a.shape[1]):
     col = np.where(a[:, x] > 0)[0]
     if len(col): a[col.min():, x] = 1
-cv2.imwrite(OUT + '/backdrop.png', shrink_rgba(pano, a))
-print('fern', fern.shape[1], fern.shape[0], 'ground', tile.shape[1], tile.shape[0], 'backdrop', round(L * SC))
+cv2.imwrite(OUT + '/backdrop.png', shrink_rgba(pano, a, SCALES['backdrop']))
+print('fern', fern.shape[1], fern.shape[0], 'ground', tile.shape[1], tile.shape[0], 'backdrop', round(L * SCALES['backdrop']))
