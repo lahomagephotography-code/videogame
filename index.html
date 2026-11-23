@@ -597,9 +597,16 @@ const Sound = {
       const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       this.apply(true);
     }
-    if (this.ctx.state === 'suspended' && !game.paused) this.ctx.resume();
+    this.unlock();
     Music.start();
   },
+  // Browsers only allow sound after the player touches the page. Try right away (desktop browsers
+  // often allow it), then again on the very first touch, click or key press of any kind.
+  unlock() {
+    if (!this.ctx || game.paused || this.ctx.state === 'running') return;
+    const p = this.ctx.resume(); if (p && p.catch) p.catch(() => {});
+  },
+  get locked() { return !this.ctx || this.ctx.state !== 'running'; },
   apply(now) {                  // push the on/off settings into the volume buses
     if (!this.ctx) return;
     const t = this.ctx.currentTime, k = now ? 0.001 : 0.03;
@@ -1426,10 +1433,11 @@ function drawHUD() {
 
 const TITLE_COLORS = ['#fff3a0', '#ffe066', '#ffb347', '#ff7eb6', '#ff4fa0'];
 function drawTitle() {
-  drawText('SOLD RAPTOR', W / 2, 8, 5, TITLE_COLORS, 'center', '#2a0d3a');
-  drawText('A REAL ESTATE RAMPAGE', W / 2, 37, 1, '#ffffff', 'center');
-  if (Math.floor(game.t * 2) % 2 === 0) drawText('TAP OR PRESS SPACE TO JUMP', W / 2, 194, 2, '#ffffff', 'center');
-  if (game.best > 0) drawText('BEST ' + String(game.best).padStart(6, '0'), W / 2, 208, 1, '#ffe066', 'center');
+  drawText('SOLD RAPTOR', W / 2, 28, 5, TITLE_COLORS, 'center', '#2a0d3a');
+  drawText('A REAL ESTATE RAMPAGE', W / 2, 57, 1, '#ffffff', 'center');
+  if (Math.floor(game.t * 2) % 2 === 0) drawText('TAP OR PRESS SPACE TO JUMP', W / 2, 76, 2, '#ffffff', 'center');
+  if (game.best > 0) drawText('BEST ' + String(game.best).padStart(6, '0'), W / 2, 94, 1, '#ffe066', 'center');
+  if (Sound.locked && !Sound.muted && Math.floor(game.t * 2) % 2 === 1) drawText('TAP FOR MUSIC', W / 2, 106, 1, '#7dffea', 'center');
   drawMuteButton();
 }
 
@@ -1547,7 +1555,7 @@ window.addEventListener('pointercancel', releasePointer);
 window.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 window.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) return;
+  if (!document.hidden) { if (game.mode !== 'play') Sound.unlock(); return; }   // music back on when you return
   if (game.mode === 'play') setPaused(true);
   else if (Sound.ctx) Sound.ctx.suspend();          // no music in the background
 });
@@ -1569,6 +1577,11 @@ function frame(now) {
 }
 
 function boot() {
+  // iPhone: treat the game as music playback so the ring/silent switch doesn't mute it (iOS 16.4+)
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* not supported */ }
+  Sound.init();                                  // start the music now if the browser allows it
+  for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'])
+    window.addEventListener(ev, () => Sound.unlock(), { capture: true, passive: true });
   buildAllSprites();
   game.player = newPlayer();
   resize();
