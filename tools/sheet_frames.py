@@ -1,9 +1,12 @@
 # Cut the 12 walk frames out of reference/walk_sheet.webp (green screen), remove the green,
 # and line them up: same ground line for the feet, body centred on the same column.
-# Writes WORKDIR/sheet_frames.npy  (12 x H x W x 4, BGRA, sheet resolution)
+# Writes WORKDIR/<name>.npy  (12 x H x W x 4, BGRA, sheet resolution)
+#   python3 tools/sheet_frames.py WORKDIR [sheet image] [name]
 import sys, cv2, numpy as np
 S = sys.argv[1]
-im = cv2.imread('reference/walk_sheet.webp')
+SRC = sys.argv[2] if len(sys.argv) > 2 else 'reference/walk_sheet.webp'
+NAME = sys.argv[3] if len(sys.argv) > 3 else 'sheet_frames'
+im = cv2.copyMakeBorder(cv2.imread(SRC), 12, 12, 12, 12, cv2.BORDER_CONSTANT, value=(0, 255, 0))   # frames may touch the edge
 b, g, r = [im[..., i].astype(np.float32) for i in range(3)]
 # soft key: how much greener than the other channels
 spill = g - np.maximum(r, b)
@@ -30,11 +33,11 @@ for i in cells:
     upper = ys < ys.min() + 0.55 * (feet - ys.min())          # rider + body, not the legs
     cx = xs[upper].mean()
     frames.append(f); info.append((feet, cx))
-CW, CH = 400, 270; BASE = 258; MID = 215                     # common canvas, ground line, centre column
+CW, CH = (480, 270) if NAME != 'sheet_frames' else (400, 270); BASE = 258; MID = 260 if NAME != 'sheet_frames' else 215                    # common canvas, ground line, centre column
 stack = np.zeros((12, CH, CW, 4), np.uint8)
 for k, (f, (feet, cx)) in enumerate(zip(frames, info)):
     ox, oy = int(round(MID - cx)), int(BASE - feet)
     h, w = f.shape[:2]
     stack[k, oy:oy + h, ox:ox + w] = f
-np.save(S + '/sheet_frames.npy', stack)
+np.save(S + '/' + NAME + '.npy', stack)
 print('ok', [int(i[1]) for i in info])
