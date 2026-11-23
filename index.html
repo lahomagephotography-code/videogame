@@ -64,9 +64,9 @@ const CFG = {
 
   // World speed / difficulty
   BASE_SPEED: 95,           // starting scroll speed (units/s)
-  SPEED_STEP: 12,           // added every HOUSES_PER_LEVEL houses
+  SPEED_STEP: 12,           // added every level (every HOUSES_PER_LEVEL houses sold)
   MAX_SPEED: 200,
-  HOUSES_PER_LEVEL: 5,
+  HOUSES_PER_LEVEL: 10,     // each level: faster, more enemies and holes (see pickChunk / maybeHazard)
   ESPRESSO_SPEED_MULT: 1.4,
 
   START_HEARTS: 3, MAX_HEARTS: 5, HURT_TIME: 2,
@@ -679,6 +679,7 @@ const Sound = {
       case 'hit':    this.tone(440, 110, 0.35, 'sawtooth', 0.22); this.tone(330, 80, 0.35, 'square', 0.12, 0.02); break;
       case 'fall':   this.tone(900, 120, 0.7, 'square', 0.12); break;
       case 'level':  this.arp([523, 659, 784, 659, 784, 1047], 0.07, 0.09, 'square', 0.12); break;
+      case 'miss':   this.tone(330, 160, 0.25, 'square', 0.14); this.tone(250, 120, 0.3, 'square', 0.1, 0.12); break;
       case 'click':  this.tone(660, 660, 0.05, 'square', 0.12); break;
       case 'over':   this.arp([523, 392, 330, 262, 196], 0.18, 0.22, 'triangle', 0.3); break;
     }
@@ -779,7 +780,13 @@ const brick = (x, y) => addBlock(x, y, 'brick');
 const keyBlock = (x, y) => addBlock(x, y, 'key');
 const starBlock = (x, y) => addBlock(x, y, 'star');     // always holds an ESPRO
 function addEnemy(kind, x) {
-  game.enemies.push({ kind, x, y: GROUND_Y, vx: kind === 'low' ? -22 : -50, vy: 0, t: Math.random(), state: 'walk', timer: 0, falling: false });
+  const L = level();                         // enemies walk / roll a little faster every level
+  const vx = kind === 'low' ? -Math.min(50, 22 + 4 * L) : -Math.min(90, 50 + 6 * L);
+  game.enemies.push({ kind, x, y: GROUND_Y, vx, vy: 0, t: Math.random(), state: 'walk', timer: 0, falling: false });
+}
+// From level 2 on, hazards also show up in the coin and block sections (more often each level).
+function maybeHazard(x, L) {
+  if (L >= 1 && Math.random() < Math.min(0.6, 0.18 * L)) addEnemy(L >= 2 && Math.random() < 0.35 ? 'tape' : 'low', x);
 }
 function addGap(x, w) { game.gaps.push({ x1: x, x2: x + w }); }
 function addHouse(x) {
@@ -789,15 +796,15 @@ function addHouse(x) {
 
 // ---- Hand-designed chunks. Each places objects from x and returns its length.
 const CHUNKS = {
-  coinRow(x)   { coinLine(x + 30, GROUND_Y - 22, 6, 16); return 170; },
-  coinArc(x)   { coinArc(x + 30, GROUND_Y - 30, 7, 18, 60); return 190; },
-  keyRow(x)    {
+  coinRow(x, L) { coinLine(x + 30, GROUND_Y - 22, 6, 16); maybeHazard(x + 140, L); return 170; },
+  coinArc(x, L) { coinArc(x + 30, GROUND_Y - 30, 7, 18, 60); maybeHazard(x + 85, L); return 190; },
+  keyRow(x, L) {
     brick(x + 40, ROW_TOP); keyBlock(x + 56, ROW_TOP); brick(x + 72, ROW_TOP);
     (Math.random() < 0.35 ? starBlock : keyBlock)(x + 88, ROW_TOP); brick(x + 104, ROW_TOP);
-    coinLine(x + 48, ROW_TOP - 12, 5, 16); return 190;
+    coinLine(x + 48, ROW_TOP - 12, 5, 16); maybeHazard(x + 160, L); return 190;
   },
-  singleKey(x) { keyBlock(x + 50, ROW_TOP); coinLine(x + 100, GROUND_Y - 22, 3, 16); return 160; },
-  espro(x)     { brick(x + 40, ROW_TOP); starBlock(x + 56, ROW_TOP); brick(x + 72, ROW_TOP); coinArc(x + 100, GROUND_Y - 26, 4, 16, 24); return 180; },
+  singleKey(x, L) { keyBlock(x + 50, ROW_TOP); coinLine(x + 100, GROUND_Y - 22, 3, 16); maybeHazard(x + 140, L); return 160; },
+  espro(x, L)  { brick(x + 40, ROW_TOP); starBlock(x + 56, ROW_TOP); brick(x + 72, ROW_TOP); coinArc(x + 100, GROUND_Y - 26, 4, 16, 24); maybeHazard(x + 160, L); return 180; },
   platforms(x, L) {          // low ledge, then a high ledge you can only reach from it
     for (let i = 0; i < 5; i++) brick(x + 30 + i * 16, PLAT_TOP);
     coinLine(x + 38, PLAT_TOP - 14, 5, 16);
@@ -807,27 +814,28 @@ const CHUNKS = {
     if (L >= 1) addEnemy('low', x + 120);
     return 260;
   },
-  steps(x) {                 // a staircase of brick ledges
+  steps(x, L) {              // a staircase of brick ledges
     for (let i = 0; i < 3; i++) brick(x + 30 + i * 16, PLAT_TOP);
     for (let i = 0; i < 3; i++) brick(x + 100 + i * 16, PLAT2_TOP);
     for (let i = 0; i < 3; i++) brick(x + 170 + i * 16, PLAT_TOP);
     coinArc(x + 100, PLAT2_TOP - 14, 3, 16, 10);
+    maybeHazard(x + 120, L);
     return 260;
   },
   enemies(x, L) {
-    const n = 1 + Math.floor(Math.random() * (1 + Math.min(3, L)));
-    for (let i = 0; i < n; i++) addEnemy('low', x + 60 + i * 50);
+    const n = 1 + Math.floor(Math.random() * (1 + Math.min(4, L))), gap = Math.max(36, 50 - 3 * L);
+    for (let i = 0; i < n; i++) addEnemy(L >= 3 && i === n - 1 && Math.random() < 0.4 ? 'tape' : 'low', x + 60 + i * gap);
     coinLine(x + 50, GROUND_Y - 72, n * 3, 16);
-    return 110 + n * 50;
+    return 110 + n * gap;
   },
   enemyBlocks(x) { keyBlock(x + 40, ROW_TOP); brick(x + 56, ROW_TOP); keyBlock(x + 72, ROW_TOP); addEnemy('low', x + 140); return 200; },
   redTape(x, L) {
     addEnemy('tape', x + 80); coinArc(x + 45, GROUND_Y - 40, 5, 18, 55);
-    if (L >= 3 && Math.random() < 0.5) { addEnemy('tape', x + 210); return 290; }
+    if (L >= 2 && Math.random() < Math.min(0.8, 0.25 * L)) { addEnemy('tape', x + 210); return 290; }
     return 200;
   },
   gap(x, L) {
-    const w = (L >= 2 && Math.random() < 0.5) ? 48 : 32;
+    const w = L === 0 ? 32 : L === 1 ? (Math.random() < 0.5 ? 48 : 32) : L === 2 ? 48 : (Math.random() < 0.5 ? 64 : 48);
     const gx = Math.ceil((x + 50) / 16) * 16;
     addGap(gx, w);
     coinArc(gx - 16, GROUND_Y - 34, 5, (w + 32) / 4, 50);
@@ -836,9 +844,10 @@ const CHUNKS = {
   house(x) { addHouse(x + 70); return 70 + 36 + 190; },
 };
 function pickChunk(L) {
-  const pool = [['coinRow', 2], ['coinArc', 3], ['keyRow', 3], ['singleKey', 2], ['platforms', 2.5], ['steps', 1.5], ['espro', 1.6],
-                ['enemies', 3 + L], ['gap', 1.5 + L * 0.3], ['enemyBlocks', 2]];
-  if (L >= 1) pool.push(['redTape', 1.5 + L * 0.5]);
+  const easy = Math.max(0.6, 1 - 0.1 * L);          // calm sections get rarer every level
+  const pool = [['coinRow', 2 * easy], ['coinArc', 3 * easy], ['keyRow', 3], ['singleKey', 2 * easy], ['platforms', 2.5], ['steps', 1.5],
+                ['espro', 1.6], ['enemies', 3 + 1.5 * L], ['gap', 1.5 + L * 0.6], ['enemyBlocks', 2 + 0.5 * L]];
+  if (L >= 1) pool.push(['redTape', 1.5 + L * 0.8]);
   const opts = pool.filter(([n]) => !(n === game.lastChunk && (n === 'gap' || n === 'redTape')));
   let r = Math.random() * opts.reduce((s, o) => s + o[1], 0);
   for (const [n, w] of opts) { r -= w; if (r <= 0) return n; }
@@ -1083,12 +1092,17 @@ function updateObjects(dt) {
   });
 
   // Houses: the raptor opens wide and swallows them whole
+  // ...but only if you run past it on the ground. Jump over it and you miss the sale.
   const mouthX = x + RAPTOR.mouth[0];
+  const low = p.y > GROUND_Y - 10;             // mouth low enough to bite the house
   game.houseList = game.houseList.filter(h => {
     if (h.eaten) { h.eatT += dt; return h.eatT < 0.25; }
-    if (game.mode !== 'play') return true;
-    if (h.x - mouthX < 40) p.chompT = Math.max(p.chompT, 0.1);
-    if (h.x <= mouthX - 4) eatHouse(h);
+    if (game.mode !== 'play' || h.missed) return true;
+    if (h.x - mouthX < 40 && low) p.chompT = Math.max(p.chompT, 0.1);
+    if (h.x <= mouthX - 4) {                     // the house reaches the mouth: on the ground = SOLD, in the air = missed
+      if (low) eatHouse(h);
+      else { h.missed = true; Sound.play('miss'); addText('MISSED!', h.x + 18, GROUND_Y - 40, '#ff8a8a', 2); }
+    }
     return true;
   });
   game.pendingSigns = game.pendingSigns.filter(s => { s.t -= dt; if (s.t <= 0) { spawnSign(); return false; } return true; });
@@ -1118,7 +1132,7 @@ function eatHouse(h) {
   }
   addText('+100', mx, my - 22, '#ffe066', 2);
   game.pendingSigns.push({ t: 0.5 });
-  if (game.houses % CFG.HOUSES_PER_LEVEL === 0) { addText('SPEED UP!', playerX(), 70, '#7dffea', 2); Sound.play('level'); }
+  if (game.houses % CFG.HOUSES_PER_LEVEL === 0) { addText('LEVEL ' + (level() + 1) + '!', playerX(), 70, '#7dffea', 2); Sound.play('level'); }
 }
 
 function spawnSign() {
@@ -1448,6 +1462,7 @@ function drawHUD() {
     if (i >= CFG.START_HEARTS && i >= game.hearts) break;
     ctx.drawImage(SPR[i < game.hearts ? 'heart_full' : 'heart_empty'], hx + i * 10, 9);
   }
+  drawText('LEVEL ' + (level() + 1), 160, 22, 1, '#7dffea');
   drawMuteButton();
   drawPauseButton();
   if (game.power) {
