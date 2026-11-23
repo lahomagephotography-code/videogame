@@ -13,5 +13,7 @@ body = body.replace('</body>\n</html>', '').rstrip()
 body = body.replace("const aspect = window.innerWidth / window.innerHeight;",
     "const vw = document.body.clientWidth || window.innerWidth, vh = document.body.clientHeight || window.innerHeight;\n  const aspect = vw / vh;")
 body = body.replace("const scale = Math.min(window.innerWidth / W, window.innerHeight / H);", "const scale = Math.min(vw / W, vh / H);")
-assert 'const vw =' in body and 'Math.min(vw / W' in body
+# the claude.ai copy has no sw.js next to it, so leave out the offline-cache registration
+body = re.sub(r"// Installable app:.*?\n\}\n", "", body, flags=re.S)
+assert 'const vw =' in body and 'Math.min(vw / W' in body and 'serviceWorker' not in body
 open(sys.argv[1], 'w', encoding='utf-8').write(title + '\n' + style + '\n' + body + '\n')
